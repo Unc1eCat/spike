@@ -1,26 +1,20 @@
-from concurrent.futures import ThreadPoolExecutor
 import imp
+from concurrent.futures import ThreadPoolExecutor
 from msilib.schema import Component
 from typing import Callable, Iterator
-from reactor.event import Event
-from reactor.injection import InjectionDispatcher
-from reactor.fabrication import FactoryDistributor
-from reactor.transformation import TransformationDistributor
-from spike.application import Application, ApplicationRegistry
-from spike.application.predefinedmodifiers import shortcut, injectable
-from reactor.abstractreactor import AbstractReactor, TransformationModes
-from reactor.transformation import TransformEvent
-from reactor.returningevent import ParallelReturningEvent
-from reactor.abstractreactor import AbstractReactor
-from reactor.injection import BaseNamedInjectable, InjectionEvent, AbstractNamedInjectable
-from reactor.event import Event
-from reactor.fabrication import FabricationEvent, FactoryComponent
-from reactor.transformation import TransformEvent
 
-from spike.application import AddApplicationEvent, GetAllApplicationsEvent
-from spike.application import ApplicationType
-from spike.spike import application
-from spike.spike.application import GetApplicationEvent
+from reactor.abstractreactor import AbstractReactor, TransformationModes
+from reactor.event import Event
+from reactor.fabrication import (FabricationEvent, FactoryComponent,
+                                 FactoryDistributor)
+from reactor.injection import (AbstractNamedInjectable, BaseNamedInjectable,
+                               InjectionDispatcher, InjectionEvent)
+from reactor.returningevent import ParallelReturningEvent
+from reactor.transformation import TransformationDistributor, TransformEvent
+from spike.application import (AddApplicationEvent, Application,
+                               ApplicationRegistry, ApplicationType,
+                               GetAllApplicationsEvent, MainApplicationType)
+from spike.application.predefinedmodifiers import injectable, shortcut
 
 class SpikeCore(Application):
     identifier = 'spike_core'
@@ -35,7 +29,7 @@ class ApplicationsLoadedEvent(Event):
 
 class Spike(AbstractReactor):
     """ The main class of the Spike framework that contains all the needed services, singletons and whatever. """
-    def __init__(self, applications: set[ApplicationType]) -> None:
+    def __init__(self, main_application: ApplicationType, applications: set[ApplicationType]) -> None:
         self._thread_pool = ThreadPoolExecutor()
         self._components = set()
         self._applications: dict[str, ApplicationType] = dict()
@@ -43,7 +37,9 @@ class Spike(AbstractReactor):
         self._injection_dispatcher: InjectionDispatcher = SpikeCore.shortcut_injection_dispatcher
         self._factory_distributor: FactoryDistributor = SpikeCore.shortcut_factory_distributor
         self._transformation_distributor: TransformationDistributor = SpikeCore.shortcut_transformation_distributor
-        
+        self._main_application = main_application
+
+        self.__register_application(main_application)
         self.__register_application(SpikeCore)
         
         for i in applications:
@@ -61,7 +57,13 @@ class Spike(AbstractReactor):
         for k, v in application.subscribers.items():
             self._injection_dispatcher.add_subscribers(k, v)
 
+        if application.identifier in self._applications:
+            raise ValueError(f'Cannot add the same application twice to Spike (cannot pass multiple applications of the same identifier in the "application" argument of the Spike constructor). But application {application} with identifier {application.identifier} occurred multiple times')    
         self._applications[application.identifier] = application
+
+    @property
+    def main_application(self) -> MainApplicationType:
+        return self._main_application
 
     def applications_iter(self) -> Iterator[ApplicationType]:
         return iter(self._applications)
