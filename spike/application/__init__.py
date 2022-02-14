@@ -1,5 +1,6 @@
 from ast import Mod
 from email.mime import application
+from itertools import accumulate
 from multiprocessing.sharedctypes import Value
 from typing import Any, Collection, Iterable, Iterator, Type, Union
 from reactor.component import Component
@@ -55,7 +56,9 @@ def _apply_modifiers(application_class, iterable: Iterable):
             iterable[i] = j.receiver
 
 class Application:
-    """ An applications is a pack of different resources for Spike (request handlers, models, plane components and etc.). """
+    """ An applications is a pack of different resources for Spike (request handlers, models, plane components and etc.). 
+    You may define custom fields on subclasses that are used by other applications 
+    """
     identifier: str
     # TODO: Protect against adding
     components: set[Component] = None
@@ -69,7 +72,11 @@ class Application:
         if not hasattr(cls, 'identifier') or cls.identifier == None:
             raise ApplicationImplementationError(f'Application class {cls} must have "identifier" attribute but it does not')
 
-    def __init_subclass__(cls) -> None:
+    def __init_subclass__(cls) -> None: # Implementors must call super TODO: Must they?
+        for i in accumulate(cls.__bases__, lambda acc, i: acc.update(i.__bases__), set()): # TODO: Add support for nested subclassing of Application class 
+            if issubclass(i, Application):
+                raise ValueError('A superclass of a custom application class must not be a subclass of spike.application. Application, the custom application class can subclass spike.application.Application only directly. But application class {cls} directly inherits from another class that is a subclass of spike.application.Application')
+
         if cls.components == None:
             cls.components = set()
         _apply_modifiers(cls, cls.components)

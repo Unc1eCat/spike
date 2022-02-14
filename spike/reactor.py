@@ -30,6 +30,9 @@ class SpikeCore(Application):
         injectable % shortcut('transformation_distributor') % TransformationDistributor('main_transformation_distributor'),
     }
 
+class ApplicationsLoadedEvent(Event):
+    """ This event is emitted when Spike finishes loading all applications """
+
 class Spike(AbstractReactor):
     """ The main class of the Spike framework that contains all the needed services, singletons and whatever. """
     def __init__(self, applications: set[ApplicationType]) -> None:
@@ -63,7 +66,6 @@ class Spike(AbstractReactor):
     def applications_iter(self) -> Iterator[ApplicationType]:
         return iter(self._applications)
 
-
     def component_iter(self) -> Iterator:
         return iter(self._components)
 
@@ -81,40 +83,12 @@ class Spike(AbstractReactor):
         
     def get_transformation_distributor(self):
         return self._transformation_distributor
+    
+    def emit(self, event: Event):
+        self.emit(event, TransformationModes.ALL)
 
-    # def _emit_to_applications(self, event: Event):
-    #     if isinstance(event, InjectionEvent):
-    #         def asnc():
-    #             ret = set()
-    #             if isinstance(event.injection_query, type):
-    #                 for i in self._applications:
-    #                     for j in i.injectables:
-    #                         if isinstance(j, event.injection_query):
-    #                             ret.add(j)
-    #             elif isinstance(event.injection_query, str):
-    #                 for i in self._applications:
-    #                     for j in i.injectables:
-    #                         if isinstance(j, AbstractNamedInjectable):
-    #                             if j.get_injectable_name() == event.injection_query:
-    #                                 ret.add(j)
-    #             else:
-    #                 raise TypeError(f'{self} received injection event {event} with query {event.injection_query} of type f{type(event.injection_query)}, but only "str" and "type " are allowed types')      
-    #             return ret
-    #         event.reply(self, self.run_async(asnc))
-    #     elif isinstance(event, FabricationEvent):
-    #         for i in self._applications:
-    #             for j in i.factories:
-    #                 j.on_event(event)
-    #     elif isinstance(event, TransformEvent):
-    #         for i in self._applications:
-    #             for j in i.transformers:
-    #                 j.on_event(event)
-    #     for i in self._applications:
-    #         for j in i.components:
-    #             j.on_event(event)
-        
     def emit(self, event: Event, transformation_mode: TransformationModes):
-        if transformation_mode == 2:
+        if transformation_mode == TransformationModes.ALL:
             transform_event = TransformEvent(None, event)
 
             for i in self._components:
@@ -123,12 +97,12 @@ class Spike(AbstractReactor):
             
             transform_event.wait_for_reply()
             event = transform_event.previous_reply(None)
-        elif transformation_mode == 1:
+        elif transformation_mode == TransformationModes.ONLY_DISTRIBUTOR:
             self._transformation_distributor.on_event(self, transform_event := TransformEvent(None, event))
             
             transform_event.wait_for_reply()
             event = transform_event.previous_reply(None)
-        elif transformation_mode == 0:
+        elif transformation_mode == TransformationModes.NONE:
             pass
         else:
             raise ValueError(f'Transformation mode can only be set to a value in "TransformationModes" enum in reactor.abstractreactor')
